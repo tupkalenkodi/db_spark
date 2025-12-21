@@ -1,0 +1,1 @@
+n=10, edges=15, max_degree=5, count=80671
