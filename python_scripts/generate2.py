@@ -2,6 +2,9 @@ import subprocess
 from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
+import time
+import shutil
+import os
 
 
 def decode_graph6(graph6_str: str):
@@ -36,6 +39,7 @@ def process_graphs_batch(graph6_lines):
     batch_data = {
         'graph6': [],
         'graph_order': [],
+        'size': [],
         'edges': []
     }
 
@@ -46,11 +50,12 @@ def process_graphs_batch(graph6_lines):
 
         edges, n = decode_graph6(g6)
 
-        # Convert edges to string format
+        # Convert edges to string format for Avro compatibility
         edges_str = ";".join([f"{a},{b}" for a, b in edges])
 
         batch_data['graph6'].append(g6)
         batch_data['graph_order'].append(n)
+        batch_data['size'].append(len(edges))
         batch_data['edges'].append(edges_str)
 
     return batch_data
@@ -60,6 +65,7 @@ def write_parquet_direct(batch_data, output_file):
     schema = pa.schema([
         ('graph6', pa.string()),
         ('graph_order', pa.int32()),
+        ('size', pa.int32()),
         ('edges', pa.string())
     ])
 
@@ -67,87 +73,92 @@ def write_parquet_direct(batch_data, output_file):
     pq.write_table(table, str(output_file), compression='none')
 
 
-def generate_graphs(n: int, output_dir: Path, batch_size):
-    min_edges = n - 1
-    max_edges = (n * (n + 2)) // 8
-    max_degree = n // 2
-
-    print(f"n={n} - generating...")
-
-    cmd = [
-        "nauty-geng", str(n),
-        "-c",
-        f"{min_edges}:{max_edges}",
-        "-d1", f"-D{max_degree}",
-        "-l"
-    ]
-
-    output_subdir = output_dir / f"order={n}"
-    output_subdir.mkdir(parents=True, exist_ok=True)
+def generate_graphs(target_number: int, output_dir: Path, batch_size):
+    min_n = 1
+    max_n = 20
 
     batch_num = 0
     batch_lines = []
+    generated_total_graphs = 0
 
-    print('*' * 70)
+    for n in range(min_n, max_n + 1):
+        if generated_total_graphs >= target_number:
+            break
+        min_edges = n - 1
+        max_edges = (n * (n + 2)) // 8
+        max_degree = n // 2
 
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True, bufsize=1024 * 1024)
+        cmd = [
+            "nauty-geng", str(n),
+            "-c",
+            f"{min_edges}:{max_edges}",
+            "-d1", f"-D{max_degree}",
+            "-l"
+        ]
 
-    total_graphs = 0
-    for line in process.stdout:
-        line = line.strip()
-        if not line:
-            continue
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True, bufsize=1024 * 1024)
 
-        batch_lines.append(line)
-        total_graphs += 1
+        for line in process.stdout:
+            line = line.strip()
+            if not line:
+                continue
 
-        # WRITE BATCH WHEN FULL
-        if len(batch_lines) >= batch_size:
-            # Process all graphs in batch at once
-            batch_data = process_graphs_batch(batch_lines)
+            batch_lines.append(line)
+            generated_total_graphs += 1
 
-            # Write directly to Parquet
-            output_file = output_subdir / f"batch_{batch_num:04d}.parquet"
-            write_parquet_direct(batch_data, output_file)
+            # Write temporary batch when full
+            if len(batch_lines) >= batch_size:
+                batch_data = process_graphs_batch(batch_lines)
+                output_file = output_dir / f"batch_{batch_num:04d}.parquet"
+                write_parquet_direct(batch_data, output_file)
 
-            print(f"  Batch {batch_num}: {total_graphs:,} graphs processed...")
+                batch_num += 1
+                batch_lines = []
 
-            batch_num += 1
-            batch_lines = []
+                print(f"  Batch {batch_num} / {target_number // batch_size} graphs generated..")
 
-    # WRITE FINAL BATCH
+
+            if generated_total_graphs >= target_number:
+                process.terminate()
+                break
+
+        process.wait()
+
+    # Process any remaining graphs
     if batch_lines:
-        batch_data = process_graphs_batch(batch_lines)
-        output_file = output_subdir / f"batch_{batch_num:04d}.parquet"
+        batch_data = process_graphs_batch(batch_lines, n)
+
+        output_file = output_dir / f"batch_{batch_num:04d}.parquet"
         write_parquet_direct(batch_data, output_file)
+        batch_num += 1
 
-    print('*' * 70)
-    process.wait()
-
-    print(f"n={n} - saved {total_graphs:,} graphs in {batch_num + 1} batches\n")
+    print(f"\nGenerated {generated_total_graphs:,} graphs in {batch_num} batches")
 
 
 def main():
-    import argparse
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--n1", type=int, required=True)
-    parser.add_argument("--n2", type=int, required=True)
-
-    args = parser.parse_args()
-
-    output_dir = Path(f"/home/cubic/PROJECTS/db_spark_scala/data/generated")
+    output_dir = Path(f"/home/cubic/PROJECTS/db_spark_scala/data/chi/input_data")
     output_dir.parent.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(exist_ok=True)
 
+    target_number = 500_000_000
 
     print("=" * 70)
-    print(f"GRAPH GENERATION: n = {args.n1} : {args.n2}")
+    print(f"GRAPH GENERATION: target number = {target_number}")
     print("=" * 70)
 
-    for n in range(args.n1, args.n2 + 1):
-        generate_graphs(n, output_dir, batch_size=1000000)
+    # Record start time
+    start_time = time.time()
 
+    # Run your function
+    generate_graphs(target_number, output_dir, batch_size=1_000_000)
+
+    # Record end time
+    end_time = time.time()
+
+    # Calculate and print elapsed time
+    elapsed_time = end_time - start_time
+    print(f"Execution time: {elapsed_time:.2f} seconds")
     print("=" * 70)
     print("Generation complete!")
     print("=" * 70)
@@ -155,3 +166,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
