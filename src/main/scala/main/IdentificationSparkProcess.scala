@@ -119,7 +119,7 @@ object IdentificationSparkProcess {
           .join(edgesGrouped, "component")
           .select("component", "vertices", "edges")
 
-        componentsWithData
+        val result = componentsWithData
           .as[(Long, Seq[String], Seq[(String, String)])]
           .rdd
           .map { case (componentId, verticesSeq, edgesSeq) =>
@@ -127,6 +127,12 @@ object IdentificationSparkProcess {
               val edges = edgesSeq.toArray
               (componentId, vertices, edges)
           }
+
+        // IMPORTANT: Unpersist when done
+        largeComponents.unpersist()
+        componentEdges.unpersist()
+
+        result
     }
 
     private def findMatchesInComponent(componentId: Long,
@@ -195,6 +201,10 @@ object IdentificationSparkProcess {
             val startTime = System.nanoTime()
 
             sparkSession = SparkSessionFactory.createSession("Identification")
+            
+            // Clear any existing cached data from previous runs
+            sparkSession.catalog.clearCache()
+
             println("\n" + "=" * 70)
             println(s"IDENTIFYING HIGHLY IRREGULAR SUBGRAPHS")
             println("=" * 70)
