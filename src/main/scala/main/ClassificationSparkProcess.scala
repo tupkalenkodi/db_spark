@@ -71,7 +71,6 @@ object ClassificationSparkProcess {
         numberOfExecutors
     }
 
-    // Function to save timing data as JSON
     private def saveTimingToJson(data: TimingData, outputFile: String): Unit = {
         val json = s"""{
   "timestamp": "${data.timestamp}",
@@ -88,7 +87,11 @@ ${data.timings.map { case (k, v) => s"""    "$k": $v""" }.mkString(",\n")}
   "total_time_seconds": ${data.totalTime}
 }"""
 
-        val writer = new PrintWriter(new File(outputFile))
+        val file = new File(outputFile)
+        // Create parent directory if it doesn't exist
+        file.getParentFile.mkdirs()
+
+        val writer = new PrintWriter(file)
         try {
             writer.write(json)
             println(s"\n  Timing data saved to: $outputFile")
@@ -291,7 +294,7 @@ ${data.timings.map { case (k, v) => s"""    "$k": $v""" }.mkString(",\n")}
 
             val outputPath = "/timing_results"
             val jsonFile = s"$outputPath/classification_order${order}_$timestamp.json"
-            new File(outputPath).mkdirs() // Create directory if it doesn't exist
+            new File(outputPath).mkdirs()
             saveTimingToJson(timingData, jsonFile)
 
         } catch {
