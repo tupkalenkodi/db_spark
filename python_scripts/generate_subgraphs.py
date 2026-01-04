@@ -96,6 +96,7 @@ def generate_graphs(n: int, output_dir: Path, batch_size):
     print('*' * 70)
 
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True, bufsize=1024 * 1024)
+    terminate = False
 
     total_graphs = 0
     for line in process.stdout:
@@ -118,13 +119,20 @@ def generate_graphs(n: int, output_dir: Path, batch_size):
             print(f"  Batch {batch_num}: {total_graphs:,} graphs processed...")
 
             batch_num += 1
+
+            # I want to limit the output to avoid memory errors
+            if batch_num == 1_000_000_000// batch_size:
+                terminate = True
+                process.terminate()
+                break
             batch_lines = []
 
-    # WRITE FINAL BATCH
-    if batch_lines:
-        batch_data = process_graphs_batch(n, batch_lines)
-        output_file = output_dir / f"batch_{batch_num:04d}.parquet"
-        write_parquet_direct(batch_data, output_file)
+    if not terminate:
+        # WRITE FINAL BATCH
+        if batch_lines:
+            batch_data = process_graphs_batch(n, batch_lines)
+            output_file = output_dir / f"batch_{batch_num:04d}.parquet"
+            write_parquet_direct(batch_data, output_file)
 
     print('*' * 70)
     process.wait()
@@ -134,23 +142,26 @@ def generate_graphs(n: int, output_dir: Path, batch_size):
 
 
 def main():
-    n = 10
+    n1 = 10
+    n2 = 13
 
     # Get the script's directory (where this Python file is located)
     script_dir = Path(__file__).parent
 
     # Directory at the project root:
     project_root = script_dir.parent
-    output_dir = project_root / "data" / "generated" / f"order={n}"
-
-    # Setup output directory
-    output_dir = setup_output_directory(output_dir)
 
     print("=" * 70)
     print(f"PATTERN GRAPH SEARCH SPACE GENERATION")
     print("=" * 70)
 
-    generate_graphs(n, output_dir, batch_size=1000000)
+    for n in  range(n1, n2 + 1):
+        output_dir = project_root / "data" / "generated" / f"order={n}"
+
+        # Setup output directory
+        output_dir = setup_output_directory(output_dir)
+
+        generate_graphs(n, output_dir, batch_size=1_000_000)
 
     print("=" * 70)
     print("GENERATION COMPLETE!")

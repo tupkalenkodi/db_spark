@@ -2,9 +2,11 @@ import networkx as nx
 import pyarrow as pa
 import pyarrow.parquet as pq
 from pathlib import Path
+import numpy as np
 import random
 import shutil
 import matplotlib.pyplot as plt
+
 
 def visualize_graph(graph, output_dir):
     plt.figure(figsize=(12, 10))
@@ -50,8 +52,18 @@ def setup_output_directory(output_dir):
 
 def generate_graph(num_components, component_sizes, graph_type, **kwargs):
 
-    if component_sizes is None:
-        component_sizes = [random.randint(10, 50) for _ in range(num_components)]
+    sizes = []
+    (m, s) = component_sizes
+    # Generate sizes from normal distribution
+    for _ in range(num_components):
+        size = np.random.normal(m, s)
+
+        # Round to nearest integer and apply bounds
+        size = round(size)
+        sizes.append(size)
+
+    # Ensure all sizes are integers
+    sizes = [int(size) for size in sizes]
 
     components = []
     node_offset = 0
@@ -59,7 +71,7 @@ def generate_graph(num_components, component_sizes, graph_type, **kwargs):
     print('\n')
     print('*' * 70)
 
-    for i, size in enumerate(component_sizes):
+    for i, size in enumerate(sizes):
         print(f"Generating component {i+1}/{num_components} with {size} nodes...")
 
         # Generate component based on type
@@ -160,9 +172,9 @@ def main():
     output_dir = setup_output_directory(output_dir)
 
     # Multi-component options
-    num_components = 1
+    num_components = 100
     # Set to [20, 30, 40] for specific sizes, or None for random
-    component_sizes = [30]
+    component_sizes_mean_sd = (1000, 10)
 
     # Graph type: 'erdos_renyi', 'barabasi_albert', 'watts_strogatz',
     #             'random_regular', 'powerlaw_cluster', 'complete', 'cycle'
@@ -183,13 +195,15 @@ def main():
     print("=" * 70)
 
     # Generate graph
-    graph = generate_graph(num_components=num_components,component_sizes=component_sizes,
+    graph = generate_graph(num_components=num_components,component_sizes=component_sizes_mean_sd,
                            graph_type=graph_type, p=p, m=m, k=k, d=d)
 
     # Print statistics
+    print("Printing Statistics...")
     print_statistics(graph)
 
     # Save to Parquet
+    print("Saving Files...")
     save_to_parquet(graph, output_dir)
 
     # Add visualization

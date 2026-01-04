@@ -28,7 +28,7 @@ echo "  connected"
 echo "========================================="
 
 # Number of parallel jobs (adjust based on CPU cores)
-cores=7
+cores=8
 echo "Using $cores parallel jobs..."
 
 # Create temporary directory for output
