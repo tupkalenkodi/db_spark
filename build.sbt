@@ -1,7 +1,7 @@
 ThisBuild / version := "0.1.0-SNAPSHOT"
-ThisBuild / scalaVersion := "2.13.16"
+ThisBuild / scalaVersion := "2.12.19"
 
-val sparkVersion = "3.5.3"
+val sparkVersion = "3.5.1"
 val parquet4sVersion = "2.23.0"
 
 lazy val root = (project in file("."))
@@ -13,13 +13,11 @@ lazy val root = (project in file("."))
       "org.apache.spark" %% "spark-core" % sparkVersion, // spark
       "org.apache.spark" %% "spark-sql" % sparkVersion, // spark SQL
       "org.apache.spark" %% "spark-graphx" % sparkVersion, // spark GraphX
-      "graphframes" % "graphframes" % "0.8.3-spark3.5-s_2.13",  // spark GraphFrames
+      "graphframes" % "graphframes" % "0.8.3-spark3.5-s_2.12",  // spark GraphFrames
       "org.jgrapht" % "jgrapht-core" % "1.5.2", // for subgraphs identification
 
       // Parquet4s - pure Scala Parquet library
       "com.github.mjakubowski84" %% "parquet4s-core" % parquet4sVersion,
-      // Scala parallel collections
-      "org.scala-lang.modules" %% "scala-parallel-collections" % "1.2.0"
     ),
 
     // Add resolver for GraphFrames
@@ -71,3 +69,24 @@ lazy val root = (project in file("."))
       "SPARK_LOCAL_IP" -> "127.0.0.1"
     )
   )
+// Assembly configuration
+assembly / assemblyJarName := "graph-classifier.jar"
+assembly / assemblyMergeStrategy := {
+  case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+  case "reference.conf" => MergeStrategy.concat
+  case "application.conf" => MergeStrategy.concat
+  case x => MergeStrategy.first
+}
+
+// Exclude Spark jars (provided by cluster)
+assembly / assemblyExcludedJars := {
+  val cp = (assembly / fullClasspath).value
+  cp.filter { f =>
+    val name = f.data.getName
+    name.contains("spark-") || 
+    name.contains("hadoop-") ||
+    name.contains("parquet-") ||
+    name.contains("avro-") ||
+    name.contains("protobuf-")
+  }
+}

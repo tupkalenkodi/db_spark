@@ -7,6 +7,7 @@ import org.apache.spark.sql.functions._
 import org.jgrapht.Graph
 import org.jgrapht.graph.{DefaultEdge, SimpleGraph}
 import org.jgrapht.alg.isomorphism.VF2SubgraphIsomorphismInspector
+import scala.jdk.CollectionConverters._
 
 
 object IdentificationSparkProcess {
@@ -18,10 +19,11 @@ object IdentificationSparkProcess {
                                      spark: SparkSession
                                     ): Unit = {
         // Step 1: Load pattern graphs
-        println("\n[1] Loading and Broadcasting pattern graphs...")
+        println("\n[1] Loading pattern graphs...")
         val patterns = loadPatternGraphs(subgraphsPath, n, spark)
-        val patternsBroadcast = spark.sparkContext.broadcast(patterns)
-        println(s"    Loaded and Broadcasted ${patterns.length} pattern graphs")
+        // Convert patterns to RDD
+        val patternsRDD = spark.sparkContext.parallelize(patterns.zipWithIndex.toIndexedSeq)
+        println(s"    Loaded ${patterns.length} pattern graphs")
 
         // Step 2: Load the big graph
         println("\n[2] Loading target graph...")
@@ -34,10 +36,21 @@ object IdentificationSparkProcess {
         val componentCount = componentsRDD.count()
         println(s"    Found $componentCount valid components")
 
-        // Step 4: Process components in parallel
-        println(s"\n[4] Processing components in parallel...")
-        val matchesRDD = componentsRDD.flatMap { case (componentId, vertices, edges) =>
-            findMatchesInComponent(componentId, vertices, edges, patternsBroadcast.value)
+
+        // Step 4: Process (components, patterns) in parallel
+        println(s"\n[4] Processing (components, patterns) in parallel...")
+        // Create Cartesian product: (component, pattern)
+        val componentPatternPairs = componentsRDD.cartesian(patternsRDD)
+        val totalPairs = componentCount * patterns.length
+
+        val matchesRDD = componentPatternPairs.zipWithIndex.flatMap {
+            case (((componentId, vertices, edges), (patternObj, patternIndex)), idx) =>
+                val matches = findMatches(componentId, vertices, edges, patternObj)
+
+                // Progress logging
+                println(s"Processed pair $idx/$totalPairs")
+
+                matches
         }
 
         val totalMatches = matchesRDD.count()
@@ -98,14 +111,12 @@ object IdentificationSparkProcess {
         val largeComponents = components
           .join(componentSizes, "component")
           .select("component", "id")
-          .cache()
 
         val componentEdges = graph.edges
           .join(largeComponents.select($"id".as("src"), $"component".as("src_comp")), "src")
           .join(largeComponents.select($"id".as("dst"), $"component".as("dst_comp")), "dst")
           .filter($"src_comp" === $"dst_comp")
           .select($"src_comp".as("component"), $"src", $"dst")
-          .cache()
 
         val verticesGrouped = largeComponents
           .groupBy("component")
@@ -119,7 +130,7 @@ object IdentificationSparkProcess {
           .join(edgesGrouped, "component")
           .select("component", "vertices", "edges")
 
-        val result = componentsWithData
+        componentsWithData
           .as[(Long, Seq[String], Seq[(String, String)])]
           .rdd
           .map { case (componentId, verticesSeq, edgesSeq) =>
@@ -127,43 +138,33 @@ object IdentificationSparkProcess {
               val edges = edgesSeq.toArray
               (componentId, vertices, edges)
           }
-
-        // IMPORTANT: Unpersist when done
-        largeComponents.unpersist()
-        componentEdges.unpersist()
-
-        result
     }
 
-    private def findMatchesInComponent(componentId: Long,
-                                       vertices: Array[String],
-                                       edges: Array[(String, String)],
-                                       patterns: Array[PatternGraph]
-                                      ): Array[(Long, String, Map[Int, String])] = {
+    private def findMatches(componentId: Long, vertices: Array[String],
+                            edges: Array[(String, String)],
+                            pattern: PatternGraph):
+    Array[(Long, String, Map[Int, String])] = {
 
         val targetGraph = new SimpleGraph[String, DefaultEdge](classOf[DefaultEdge])
 
         vertices.foreach(targetGraph.addVertex)
         edges.foreach { case (u, v) => targetGraph.addEdge(u, v) }
 
-        patterns.flatMap { pattern =>
-            val inspector = new VF2SubgraphIsomorphismInspector(
-                targetGraph,
-                pattern.jgraph,
-                true  // induced subgraph
-            )
+        val inspector = new VF2SubgraphIsomorphismInspector(
+            targetGraph,
+            pattern.jgraph,
+            true  // induced subgraph
+        )
 
-            import scala.jdk.CollectionConverters._
-            inspector.getMappings.asScala.take(1000).map { mapping =>
-                val resultMap = (0 until pattern.jgraph.vertexSet().size()).map { patternVertex =>
-                    val patternVertexStr = patternVertex.toString
-                    val targetVertex = mapping.getVertexCorrespondence(patternVertexStr, false)
-                    patternVertex -> targetVertex
-                }.toMap
+        inspector.getMappings.asScala.take(10).map { mapping =>
+            val resultMap = (0 until pattern.jgraph.vertexSet().size()).map { patternVertex =>
+                val patternVertexStr = patternVertex.toString
+                val targetVertex = mapping.getVertexCorrespondence(patternVertexStr, false)
+                patternVertex -> targetVertex
+            }.toMap
 
-                (componentId, pattern.graph6, resultMap)
-            }.toArray
-        }
+            (componentId, pattern.graph6, resultMap)
+        }.toArray
     }
 
 

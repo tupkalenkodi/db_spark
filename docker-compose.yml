@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  spark-master:
+    image: apache/spark:3.5.1-scala2.12-java11-ubuntu
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master --host 0.0.0.0 --port 7077 --webui-port 8080
+    hostname: spark-master
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == cubic
+      replicas: 1
+    ports:
+      - "18080:8080"
+      - "7077:7077"
+    volumes:
+      - spark-data-volume:/data
+      - spark-jars-volume:/jars
+    environment:
+      - SPARK_MASTER_IP=192.168.0.107
+    networks:
+      - spark-net
+
+  spark-worker-linux:
+    image: apache/spark:3.5.1-scala2.12-java11-ubuntu
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://192.168.0.107:7077 --webui-port 8081
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == cubic
+      replicas: 1
+    volumes:
+      - spark-data-volume:/data
+      - spark-jars-volume:/jars
+    environment:
+      - SPARK_WORKER_CORES=6
+      - SPARK_WORKER_MEMORY=6G
+    networks:
+      - spark-net
+
+  spark-worker-windows:
+    image: apache/spark:3.5.1-scala2.12-java11-ubuntu
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://192.168.0.107:7077 --webui-port 8082
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == docker-desktop
+      replicas: 1
+    ports:
+      - "8082:8082"
+    volumes:
+      - spark-data-volume:/data
+      - spark-jars-volume:/jars
+    environment:
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=8G
+    networks:
+      - spark-net
+
+volumes:
+  spark-data-volume:
+    external: true
+  spark-jars-volume:
+    external: true
+
+networks:
+  spark-net:
+    driver: overlay
+    attachable: true

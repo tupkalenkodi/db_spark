@@ -4,7 +4,7 @@ import com.github.mjakubowski84.parquet4s.{ParquetReader, ParquetWriter, Path}
 import java.io.File
 import java.nio.file.{Files, Paths}
 import scala.collection.mutable
-import scala.collection.parallel.CollectionConverters._
+import scala.collection.parallel._
 import java.util.concurrent.atomic.AtomicInteger
 
 
@@ -54,7 +54,7 @@ object SimpleProcess {
       }
     }
 
-    highlyIrregular.view.mapValues(_.toSeq).toMap
+    highlyIrregular.toMap.map { case (k, v) => (k, v.toSeq) }
   }
 
   // Merge results from parallel processing
@@ -67,7 +67,7 @@ object SimpleProcess {
       }
     }
 
-    merged.view.mapValues(_.toSeq).toMap
+    merged.toMap.map { case (k, v) => (k, v.toSeq) }
   }
 
   private def writeResults(outputDir: String, mergedResults: Map[Int, Seq[String]]): Unit = {

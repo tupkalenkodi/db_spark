@@ -3,12 +3,12 @@ package main
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
-import java.nio.file.{Files, Paths}
+
 
 
 object ClassificationSparkProcess {
 
-    import Utilities.{deleteDirectory, isHighlyIrregular}
+    import Utilities.isHighlyIrregular
 
     // UDF for highly irregular classification
     private val isHighlyIrregularUDF = udf((edgesStr: String, order: Int) => {
@@ -33,14 +33,7 @@ object ClassificationSparkProcess {
         println("=" * 70)
         println(s"CLASSIFYING HIGHLY IRREGULAR GRAPHS")
         println("=" * 70)
-
-        val outputPath = Paths.get(outputDir)
-
-        if (Files.exists(outputPath)) {
-            deleteDirectory(outputPath.toFile)
-        }
-        Files.createDirectories(outputPath)
-
+        
         val schema = StructType(Array(
             StructField("graph6", StringType, nullable = false),
             StructField("graph_order", IntegerType, nullable = false),
@@ -116,17 +109,17 @@ object ClassificationSparkProcess {
     }
 
     def main(args: Array[String]): Unit = {
-        val order = 10
+        val order = 12
 
-        val inputDir = s"data/generated/order=$order"
-        val outputDir = s"data/classified/order=$order"
+        val inputDir = s"/data/generated/order=$order"
+        val outputDir = s"/data/classified/order=$order"
 
         var sparkSession: SparkSession = null
 
         try {
             val startTime = System.nanoTime()
 
-            sparkSession = SparkSessionFactory.createSession("Classification")
+            sparkSession = SparkSessionClusterFactory.createSession("Classification")
 
             classifyGraphs(order, inputDir, outputDir, sparkSession)
 
@@ -138,7 +131,7 @@ object ClassificationSparkProcess {
 
         } finally {
             if (sparkSession != null) {
-                SparkSessionFactory.stopSession(sparkSession)
+                SparkSessionClusterFactory.stopSession(sparkSession)
             }
         }
     }
