@@ -32,3 +32,6 @@ project/plugins/project/
 .tox/
 .pytest_cache/
 .mypy_cache/
+
+# Data
+.data/
