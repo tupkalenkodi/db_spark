@@ -26,13 +26,6 @@ project/plugins/project/
 .scala_dependencies
 .worksheet
 
-# Data folders (your specific patterns)
-data/
-
-# PDF files (if you don't want to track generated PDFs)
-# Uncomment if you don't want to track PDFs
-*.pdf
-
 # Project specific ignores
 .cache/
 .coverage
