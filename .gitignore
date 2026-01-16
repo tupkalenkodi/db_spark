@@ -34,4 +34,5 @@ project/plugins/project/
 .mypy_cache/
 
 # Data
-.data/
+*.parquet
+*.tar.gz
