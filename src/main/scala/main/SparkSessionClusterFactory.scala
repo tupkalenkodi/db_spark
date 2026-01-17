@@ -7,12 +7,10 @@ object SparkSessionClusterFactory {
     def createSession(appName: String): SparkSession = {
         val spark = SparkSession.builder()
           .appName(appName)
-          .master("spark://192.168.0.107:7077")  // Your cluster master
+          .master("spark://192.168.0.107:7077")
           .getOrCreate()
 
         spark.sparkContext.setLogLevel("WARN")
-
-        // Checkpoint directory
         spark.sparkContext.setCheckpointDir("/tmp/spark-checkpoint")
 
         println("=" * 70)

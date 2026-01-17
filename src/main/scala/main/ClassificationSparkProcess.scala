@@ -48,19 +48,19 @@ object ClassificationSparkProcess {
 
     private def saveTimingToJson(data: TimingData, outputFile: String): Unit = {
         val json = s"""{
-  "timestamp": "${data.timestamp}",
-  "order": ${data.order},
-  "cluster_config": {
-    "num_workers": ${data.numWorkers}
-  },
-  "results": {
-    "graphs_found": ${data.graphsFound}
-  },
-  "timings": {
-${data.timings.map { case (k, v) => s"""    "$k": $v""" }.mkString(",\n")}
-  },
-  "total_time_seconds": ${data.totalTime}
-}"""
+              "timestamp": "${data.timestamp}",
+              "order": ${data.order},
+              "cluster_config": {
+                "num_workers": ${data.numWorkers}
+              },
+              "results": {
+                "graphs_found": ${data.graphsFound}
+              },
+              "timings": {
+            ${data.timings.map { case (k, v) => s"""    "$k": $v""" }.mkString(",\n")}
+              },
+              "total_time_seconds": ${data.totalTime}
+            }"""
         val file = new File(outputFile)
         file.getParentFile.mkdirs()
         val writer = new PrintWriter(file)
@@ -82,7 +82,7 @@ ${data.timings.map { case (k, v) => s"""    "$k": $v""" }.mkString(",\n")}
         val df = spark.read.schema(schema).parquet(inputDir)
         var t1 = logTime("read_parquet", t0, timings)
 
-        // 2. CLASSIFY (Distributed)
+        // 2. CLASSIFY
         t0 = System.nanoTime()
         val highlyIrregularDF = df
           .withColumn("is_highly_irregular", isHighlyIrregularUDF(col("edges"), col("graph_order")))
@@ -95,8 +95,7 @@ ${data.timings.map { case (k, v) => s"""    "$k": $v""" }.mkString(",\n")}
 
         if (count == 0) return 0
 
-        // 3. TRANSFORM VERTICES (Distributed)
-        // Replaces the local flatMap. Uses sequence(0, n-1) and explodes it into rows.
+        // 3. TRANSFORM VERTICES
         t0 = System.nanoTime()
         val verticesDF = highlyIrregularDF.select(
             explode(sequence(lit(0), col("graph_order") - 1)).as("id"),
@@ -104,8 +103,7 @@ ${data.timings.map { case (k, v) => s"""    "$k": $v""" }.mkString(",\n")}
         )
         t1 = logTime("distributed_prepare_vertices", t0, timings)
 
-        // 4. TRANSFORM EDGES (Distributed)
-        // Replaces local parseEdgesLocal.
+        // 4. TRANSFORM EDGES
         t0 = System.nanoTime()
         val edgesDF = highlyIrregularDF.select(
             col("graph6"),
@@ -117,7 +115,7 @@ ${data.timings.map { case (k, v) => s"""    "$k": $v""" }.mkString(",\n")}
         )
         t1 = logTime("distributed_prepare_edges", t0, timings)
 
-        // 5. WRITE (Distributed)
+        // 5. WRITE
         t0 = System.nanoTime()
         verticesDF.coalesce(1).write.mode("overwrite").parquet(s"$outputDir/vertices")
         t1 = logTime("write_vertices", t0, timings)

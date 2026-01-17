@@ -6,14 +6,11 @@ import scala.collection.mutable.ArrayBuffer
 
 object Utilities {
 
-  // Function to compute neighbor degrees
   private def computeNeighborDegrees(edges: Seq[Seq[Int]], order: Int): Seq[Seq[Int]] = {
 
-    // Initialize adjacency list and degree array
     val adjList = Array.fill(order)(ArrayBuffer.empty[Int])
     val degree = Array.fill(order)(0)
 
-    // Build adjacency list and compute degrees
     edges.foreach {
       case Seq(u, v, _*) =>
         adjList(u) += v
@@ -23,7 +20,6 @@ object Utilities {
       case _ =>
     }
 
-    // Compute neighbor degrees for each vertex
     (0 until order).map { v =>
       adjList(v).map(u => degree(u)).toSeq
     }
@@ -64,7 +60,6 @@ object Utilities {
     }
   }
 
-  // Utility to delete directory recursively
   def deleteDirectory(dir: File): Unit = {
     if (dir.exists()) {
       if (dir.isDirectory) {

@@ -11,15 +11,11 @@ import matplotlib.pyplot as plt
 def visualize_graph(graph, output_dir):
     plt.figure(figsize=(12, 10))
 
-    # Choose layout
-    # For small graphs (< 100 nodes), spring layout works well
     if graph.number_of_nodes() < 100:
         pos = nx.spring_layout(graph, k=0.5, iterations=50, seed=42)
     else:
-        # For larger graphs, use kamada_kawai
         pos = nx.kamada_kawai_layout(graph)
 
-    # Draw the graph
     nx.draw_networkx_nodes(graph, pos,
                            node_color='lightblue',
                            node_size=500,
@@ -38,7 +34,6 @@ def visualize_graph(graph, output_dir):
     plt.axis('off')
     plt.tight_layout()
 
-    # Optionally display
     plt.show()
 
 def setup_output_directory(output_dir):
@@ -54,17 +49,12 @@ def generate_graph(num_components, component_sizes, graph_type, **kwargs):
 
     sizes = []
     (m, s) = component_sizes
-    # Generate sizes from normal distribution
     for _ in range(num_components):
         size = np.random.normal(m, s)
-
-        # Round to nearest integer and apply bounds
         size = round(size)
         sizes.append(size)
 
-    # Ensure all sizes are integers
     sizes = [int(size) for size in sizes]
-
     components = []
     node_offset = 0
 
@@ -74,7 +64,6 @@ def generate_graph(num_components, component_sizes, graph_type, **kwargs):
     for i, size in enumerate(sizes):
         print(f"Generating component {i+1}/{num_components} with {size} nodes...")
 
-        # Generate component based on type
         if graph_type == "erdos_renyi":
             p = kwargs.get('p', 0.3)
             graph = nx.erdos_renyi_graph(size, p)
@@ -91,14 +80,12 @@ def generate_graph(num_components, component_sizes, graph_type, **kwargs):
         else:
             return None
 
-        # Relabel nodes to avoid conflicts
         mapping = {old: f"{node_offset + old}" for old in graph.nodes()}
         graph = nx.relabel_nodes(graph, mapping)
 
         components.append(graph)
         node_offset += size
 
-    # Combine all components into one graph
     combined_graph = nx.Graph()
     for component in components:
         combined_graph = nx.compose(combined_graph, component)
@@ -129,12 +116,10 @@ def save_to_parquet(graph, output_dir, vertices_path=None, edges_path=None):
     if edges_path is None:
         edges_path = output_dir / "edges.parquet"
 
-    # Create vertices data
     vertices_data = {
         'id': [node for node in graph.nodes()]
     }
 
-    # Create edges data
     edges_data = {
         'src': [],
         'dst': []
@@ -144,14 +129,12 @@ def save_to_parquet(graph, output_dir, vertices_path=None, edges_path=None):
         edges_data['src'].append(u)
         edges_data['dst'].append(v)
 
-    # Write vertices
     vertices_schema = pa.schema([
         ('id', pa.string())
     ])
     vertices_table = pa.table(vertices_data, schema=vertices_schema)
     pq.write_table(vertices_table, str(vertices_path), compression='none')
 
-    # Write edges
     edges_schema = pa.schema([
         ('src', pa.string()),
         ('dst', pa.string())
@@ -161,17 +144,12 @@ def save_to_parquet(graph, output_dir, vertices_path=None, edges_path=None):
 
 
 def main():
-    # Get the script's directory (where this Python file is located)
     script_dir = Path(__file__).parent
-
-    # Directory at the project root:
     project_root = script_dir.parent
     output_dir = project_root / "data" / "target" / "large"
-
-    # Setup output directory
     output_dir = setup_output_directory(output_dir)
 
-    # Multi-component options
+
     num_components = 5
     # Set to [20, 30, 40] for specific sizes, or None for random
     component_sizes_mean_sd = (100, 10)
@@ -186,7 +164,6 @@ def main():
     k = 6     # Degree parameter (for watts_strogatz)
     d = 4     # Degree for random_regular graphs
 
-    # Random seed for reproducibility
     seed = 42
     random.seed(seed)
 
@@ -194,19 +171,15 @@ def main():
     print(f"TARGET GRAPH GENERATION")
     print("=" * 70)
 
-    # Generate graph
     graph = generate_graph(num_components=num_components,component_sizes=component_sizes_mean_sd,
                            graph_type=graph_type, p=p, m=m, k=k, d=d)
 
-    # Print statistics
     print("Printing Statistics...")
     print_statistics(graph)
 
-    # Save to Parquet
     print("Saving Files...")
     save_to_parquet(graph, output_dir)
 
-    # Add visualization
     # visualize_graph(graph, output_dir)
 
     print("=" * 70)

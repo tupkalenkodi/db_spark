@@ -107,12 +107,9 @@ def generate_graphs(n: int, output_dir: Path, batch_size):
         batch_lines.append(line)
         total_graphs += 1
 
-        # WRITE BATCH WHEN FULL
         if len(batch_lines) >= batch_size:
-            # Process all graphs in batch at once
             batch_data = process_graphs_batch(n, batch_lines)
 
-            # Write directly to Parquet
             output_file = output_dir / f"batch_{batch_num:04d}.parquet"
             write_parquet_direct(batch_data, output_file)
 
@@ -120,7 +117,6 @@ def generate_graphs(n: int, output_dir: Path, batch_size):
 
             batch_num += 1
 
-            # I want to limit the output to avoid memory errors
             if batch_num == 1_000_000_000// batch_size:
                 terminate = True
                 process.terminate()
@@ -128,7 +124,6 @@ def generate_graphs(n: int, output_dir: Path, batch_size):
             batch_lines = []
 
     if not terminate:
-        # WRITE FINAL BATCH
         if batch_lines:
             batch_data = process_graphs_batch(n, batch_lines)
             output_file = output_dir / f"batch_{batch_num:04d}.parquet"
@@ -145,10 +140,7 @@ def main():
     n1 = 10
     n2 = 13
 
-    # Get the script's directory (where this Python file is located)
     script_dir = Path(__file__).parent
-
-    # Directory at the project root:
     project_root = script_dir.parent
 
     print("=" * 70)
@@ -157,8 +149,6 @@ def main():
 
     for n in  range(n1, n2 + 1):
         output_dir = project_root / "data" / "generated" / f"order={n}"
-
-        # Setup output directory
         output_dir = setup_output_directory(output_dir)
 
         generate_graphs(n, output_dir, batch_size=1_000_000)

@@ -15,7 +15,6 @@ import scala.collection.mutable
 
 object IdentificationSparkProcess {
 
-    // Helper for JSON reporting
     private case class TimingData(
                                    timestamp: String,
                                    order: Int,
@@ -26,7 +25,6 @@ object IdentificationSparkProcess {
                                    matchesFound: Long
                                  )
 
-    // Move PatternGraph here to ensure it is serializable for workers
     private case class PatternGraph(graph6: String, jgraph: Graph[String, DefaultEdge]) extends Serializable
 
     private def logTime(label: String, startTime: Long, timings: mutable.Map[String, Double]): Long = {
@@ -39,20 +37,20 @@ object IdentificationSparkProcess {
 
     private def saveTimingToJson(data: TimingData, outputFile: String): Unit = {
         val json = s"""{
-  "timestamp": "${data.timestamp}",
-  "order": ${data.order},
-  "target_label": "${data.targetLabel}",
-  "cluster_config": {
-    "num_workers": ${data.numWorkers}
-  },
-  "results": {
-    "matches_found": ${data.matchesFound}
-  },
-  "timings": {
-${data.timings.map { case (k, v) => s"""    "$k": $v""" }.mkString(",\n")}
-  },
-  "total_time_seconds": ${data.totalTime}
-}"""
+              "timestamp": "${data.timestamp}",
+              "order": ${data.order},
+              "target_label": "${data.targetLabel}",
+              "cluster_config": {
+                "num_workers": ${data.numWorkers}
+              },
+              "results": {
+                "matches_found": ${data.matchesFound}
+              },
+              "timings": {
+            ${data.timings.map { case (k, v) => s"""    "$k": $v""" }.mkString(",\n")}
+              },
+              "total_time_seconds": ${data.totalTime}
+            }"""
         val file = new File(outputFile)
         file.getParentFile.mkdirs()
         val writer = new PrintWriter(file)
@@ -88,7 +86,7 @@ ${data.timings.map { case (k, v) => s"""    "$k": $v""" }.mkString(",\n")}
         val componentCount = componentsRDD.count()
         t1 = logTime("connected_components_count", t0, timings)
 
-        // Step 4: Process (components, patterns) in parallel
+        // Step 4: Process (components, patterns)
         t0 = System.nanoTime()
         println(s"\n[4] Processing ($componentCount components x ${patterns.length} patterns) via Cartesian Product...")
         val componentPatternPairs = componentsRDD.cartesian(patternsRDD)
