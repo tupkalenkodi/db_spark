@@ -6,7 +6,7 @@ out/
 __pycache__/
 
 # Virtual Environments
-venv/
+.venv/
 
 # Scala
 *.class
